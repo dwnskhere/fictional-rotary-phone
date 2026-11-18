@@ -139,7 +139,7 @@ def build_rich_help_html():
 <tr><td><code>{c["RclStorage"]}</code></td><td>Check Rclone remote storage capacity</td></tr>
 <tr><td><code>{c["RclDelete"]}</code></td><td>Delete file/folder from Rclone remote</td></tr>
 <tr><td><code>{c["RcRefreshIndex"]}</code></td><td>Refresh Rclone remote search index</td></tr>
-<tr><td><code>{c["Search"]}</code></td><td>Search torrents across multi-site APIs</td></tr>
+<tr><td><code>{c["Search"]}</code></td><td>Search torrents via Jackett / Plugins with Sleech/Mirror</td></tr>
 </table>
 </details>
 

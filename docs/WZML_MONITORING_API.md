@@ -31,7 +31,7 @@ Enable the API in `config.py` or through environment variables:
 ```python
 MONITOR_API_ENABLED = True
 MONITOR_API_TOKEN = "REPLACE_WITH_A_LONG_RANDOM_TOKEN"
-MONITOR_INTERNAL_SECRET = ""  # Optional separate secret; defaults to public token
+MONITOR_INTERNAL_SECRET = ""  # Optional; a separate secret is generated at startup when blank
 MONITOR_INTERNAL_HOST = "127.0.0.1"
 MONITOR_INTERNAL_PORT = 8765
 MONITOR_SNAPSHOT_MAX_AGE = 30
@@ -47,13 +47,13 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 Use the same `MONITOR_API_TOKEN` in WZML and the Graberr client configuration. Keep it private. Do not paste it into logs, issue trackers, source control, screenshots or public chat.
 
-`MONITOR_INTERNAL_SECRET` is optional. When blank, the private bridge uses the public token over loopback. For stricter secret separation, configure a different random secret in WZML's config/environment; the public web process reads the same setting for its private request.
+`MONITOR_INTERNAL_SECRET` is optional. When blank, WZML generates a separate random internal secret at startup and passes it to the local public web child process. It is never reused from the public token. You can instead configure a distinct internal secret explicitly. The internal secret is for local bridge authentication only and must not be shared with Graberr.
 
 The API will not start unless:
 - `MONITOR_API_ENABLED` is true;
 - `MONITOR_API_TOKEN` is at least 32 characters;
 - the private bridge host is loopback-only;
-- the internal secret (or token fallback) is at least 32 characters.
+- the separately generated/configured internal secret is at least 32 characters.
 
 The public routes are disabled with `404` when `MONITOR_API_ENABLED` is false.
 
@@ -73,6 +73,12 @@ Responses:
 - `503`: private bridge unavailable or secure configuration missing.
 
 Use HTTPS when connecting from outside the WZML host. The private bridge binds to loopback and uses a separate internal request header; it is not intended for direct external access.
+
+## 3.1 qBittorrent availability and Heroku/buildpack deployments
+
+The latest source expects the `stormtorrent` executable to be provided by its runtime/base image. In deployments where that executable is absent, startup now skips qBittorrent rather than crashing before WZML initializes. Aria2 remains available for supported direct and torrent/magnet tasks. qBittorrent-specific tasks, search plugins, settings and the qBittorrent file-selector/proxy endpoints are unavailable while the qBittorrent client is not running.
+
+This automatic fallback is runtime-only; it does not overwrite the operator's `DISABLE_QBITTORRENT` setting in MongoDB. To use qBittorrent, deploy a compatible image containing the expected custom executable or set `QBITTORRENT_BIN` to a compatible executable that accepts WZML's `-d --profile=<path>` arguments. Setting `DISABLE_QBITTORRENT = True` disables only qBittorrent. Setting `DISABLE_TORRENTS = True` disables torrent functionality according to WZML's existing behavior.
 
 ## 4. Endpoints
 
@@ -232,3 +238,10 @@ Graberr should:
 6. Treat stale data or unavailable bridge as unknown monitoring state, not as a completed or failed task.
 
 Graberr integration is a separate phase after independent WZML API verification.
+
+
+## Deployment note: optional qBittorrent daemon
+
+The current WZML source starts the custom `stormtorrent` daemon. In buildpack deployments where that executable is not present, the bot now detects the missing executable after configuration is loaded and gracefully disables only qBittorrent-specific features. Aria2 torrent/magnet downloads remain available. To use qBittorrent, deploy an image containing the expected executable or set `QBITTORRENT_BIN` to a compatible executable name/path. You can explicitly disable qBittorrent without disabling Aria2 torrent support by setting `DISABLE_QBITTORRENT=true`.
+
+The public monitoring token (`MONITOR_API_TOKEN`) is configured by the operator and shared with Graberr. The private bridge secret is separate; when `MONITOR_INTERNAL_SECRET` is empty, WZML generates an ephemeral random secret and passes it to its public web child process through the inherited environment.

@@ -197,7 +197,12 @@ def record_task_event(listener, event_type, state, error_category=None):
     task_name = str(getattr(listener, "name", None) or "Unknown task")
     import re
 
-    task_name = re.sub(r"(?:https?|ftp)://\S+|magnet:\?\S+", "[redacted-url]", task_name, flags=re.IGNORECASE)
+    task_name = re.sub(
+        r"(?:https?|ftp)://\S+|magnet:\?\S+",
+        "[redacted-url]",
+        task_name,
+        flags=re.IGNORECASE,
+    )
     if task_name.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:[\\/]", task_name):
         task_name = re.split(r"[/\\]", task_name)[-1] or "Unknown task"
     event = {

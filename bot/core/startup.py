@@ -35,12 +35,10 @@ from .torrent_manager import TorrentManager
 
 async def update_qb_options():
     LOGGER.info("Get qBittorrent options from server")
+    if Config.DISABLE_QBITTORRENT or not TorrentManager.qbittorrent:
+        LOGGER.info("qBittorrent is unavailable. Skipping qBittorrent options update.")
+        return
     if not qbit_options:
-        if not TorrentManager.qbittorrent:
-            LOGGER.warning(
-                "qBittorrent is not initialized. Skipping qBittorrent options update."
-            )
-            return
         opt = await TorrentManager.qbittorrent.app.preferences()
         qbit_options.update(opt)
         del qbit_options["listen_port"]
@@ -151,7 +149,7 @@ async def load_settings():
         ):
             aria2_options.update(a2c_options)
 
-        if not Config.DISABLE_TORRENTS:
+        if not Config.DISABLE_TORRENTS and not Config.DISABLE_QBITTORRENT:
             if qbit_opt := await database.db.settings.qbittorrent.find_one(
                 {"_id": BOT_ID}, {"_id": 0}
             ):
@@ -366,8 +364,8 @@ async def load_configurations():
 
     await TorrentManager.initiate()
 
-    if Config.DISABLE_TORRENTS:
-        LOGGER.info("Torrents are disabled. Skipping qBittorrent initialization.")
+    if Config.DISABLE_TORRENTS or Config.DISABLE_QBITTORRENT or not TorrentManager.qbittorrent:
+        LOGGER.info("qBittorrent initialization skipped; Aria2 remains available unless all torrents are disabled.")
     else:
         try:
             await TorrentManager.qbittorrent.app.set_preferences(qbit_options)

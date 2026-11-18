@@ -38,7 +38,8 @@ def _public_token():
 
 
 def _internal_token():
-    return str(_setting("MONITOR_INTERNAL_SECRET", "") or _public_token()).strip()
+    # The loopback bridge secret is intentionally distinct from the public API token.
+    return str(_setting("MONITOR_INTERNAL_SECRET", "") or "").strip()
 
 
 def _internal_url(path):

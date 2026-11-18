@@ -21,6 +21,8 @@ class Config:
     DELETE_LINKS = False
     DEBRID_LINK_API = ""
     DISABLE_TORRENTS = False
+    # Disable only the qBittorrent daemon/client; Aria2 torrent support remains available.
+    DISABLE_QBITTORRENT = False
     DISABLE_LEECH = False
     DISABLE_BULK = False
     DISABLE_MULTI = False
@@ -56,6 +58,10 @@ class Config:
     INCOMPLETE_TASK_RESUME = False
     INDEX_URL = ""
     IS_TEAM_DRIVE = False
+    JACKETT_URL = ""
+    JACKETT_API_KEY = ""
+    JACKETT_SEARCH_LIMIT = 10
+    JACKETT_SERIES_COOLDOWN = 180
     JD_EMAIL = ""
     JD_PASS = ""
     SEEDR_EMAIL = ""
@@ -305,7 +311,7 @@ class Config:
 
 class BinConfig:
     ARIA2_NAME = "blitzfetcher"
-    QBIT_NAME = "stormtorrent"
+    QBIT_NAME = getenv("QBITTORRENT_BIN", "stormtorrent")
     FFMPEG_NAME = "mediaforge"
     RCLONE_NAME = "ghostdrive"
     SABNZBD_NAME = "newsripper"

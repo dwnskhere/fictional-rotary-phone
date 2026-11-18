@@ -14,9 +14,8 @@ def public_token():
 
 
 def internal_token():
-    return str(
-        getattr(Config, "MONITOR_INTERNAL_SECRET", "") or public_token()
-    ).strip()
+    # Never reuse the public client token for the private loopback bridge.
+    return str(getattr(Config, "MONITOR_INTERNAL_SECRET", "") or "").strip()
 
 
 def token_matches(provided, expected):

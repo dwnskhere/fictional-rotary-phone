@@ -9,8 +9,6 @@ from asyncio import new_event_loop, set_event_loop
 bot_loop = new_event_loop()
 set_event_loop(bot_loop)
 
-from subprocess import run as srun
-from os import getcwd
 from asyncio import Lock
 from logging import (
     ERROR,
@@ -26,7 +24,6 @@ from time import time
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from .core.config_manager import BinConfig
 from sabnzbdapi import SabnzbdClient
 
 getLogger("requests").setLevel(WARNING)
@@ -80,6 +77,15 @@ var_list = [
     "UPSTREAM_REPO",
     "UPSTREAM_BRANCH",
     "UPDATE_PKGS",
+    "DISABLE_QBITTORRENT",
+    "MONITOR_API_ENABLED",
+    "MONITOR_API_TOKEN",
+    "MONITOR_INTERNAL_SECRET",
+    "MONITOR_INTERNAL_HOST",
+    "MONITOR_INTERNAL_PORT",
+    "MONITOR_SNAPSHOT_MAX_AGE",
+    "MONITOR_HISTORY_ENABLED",
+    "MONITOR_HISTORY_RETENTION_DAYS",
 ]
 auth_chats = {}
 excluded_extensions = ["aria2", "!qB"]
@@ -106,6 +112,4 @@ sabnzbd_client = SabnzbdClient(
     api_key="admin",
     port="8070",
 )
-srun([BinConfig.QBIT_NAME, "-d", f"--profile={getcwd()}"], check=False)
-
 scheduler = AsyncIOScheduler(event_loop=bot_loop)

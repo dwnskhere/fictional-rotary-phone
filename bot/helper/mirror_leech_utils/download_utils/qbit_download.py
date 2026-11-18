@@ -50,6 +50,11 @@ async def add_qb_torrent(listener, path, ratio, seed_time):
     if Config.DISABLE_TORRENTS:
         await listener.on_download_error("Torrents are disabled in the configuration.")
         return
+    if Config.DISABLE_QBITTORRENT or TorrentManager.qbittorrent is None:
+        await listener.on_download_error(
+            "qBittorrent is unavailable in this deployment. Use the default Aria2 torrent engine or install the qBittorrent daemon."
+        )
+        return
     is_bl, bl_kw = await check_blacklisted_keywords(
         listener, listener.name or listener.link
     )

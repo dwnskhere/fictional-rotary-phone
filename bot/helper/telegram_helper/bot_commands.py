@@ -33,7 +33,7 @@ class BotCommands:
         "Latest": "latest",
         "RclStorage": "rclstorage",
         "RclDelete": "rcldelete",
-        "Search": "search",
+        "Search": ["search", "s"],
         "Users": "users",
         "CancelTask": ["cancel", "c"],
         "CancelAll": ["cancelall", "call"],

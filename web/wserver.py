@@ -10,6 +10,7 @@ set_event_loop(bot_loop)
 
 from asyncio import sleep
 from urllib.parse import urlparse
+from os import getenv
 from contextlib import asynccontextmanager
 from logging import INFO, WARNING, FileHandler, StreamHandler, basicConfig, getLogger
 
@@ -45,19 +46,29 @@ SERVICES = {
 async def lifespan(app: FastAPI):
     global aria2, qbittorrent
     aria2 = Aria2HttpClient("http://localhost:6800/jsonrpc")
-    qbittorrent = await create_client("http://localhost:8090/api/v2/")
+    disable_qbit = getenv("DISABLE_QBITTORRENT", "false").strip().lower() in ("1", "true", "yes", "on")
+    if not disable_qbit:
+        try:
+            qbittorrent = await create_client("http://localhost:8090/api/v2/")
+        except Exception as exc:
+            qbittorrent = None
+            LOGGER.warning(f"qBittorrent web client unavailable: {type(exc).__name__}")
+    else:
+        qbittorrent = None
     yield
     await aria2.close()
-    await qbittorrent.close()
+    if qbittorrent is not None:
+        await qbittorrent.close()
 
 
 app = FastAPI(lifespan=lifespan)
 
-# Read-only WZML monitoring routes proxy to the private loopback bridge in the
-# bot process. Existing file-selector routes above/below remain unchanged.
+# Public read-only monitoring routes proxy to the private loopback bridge in
+# the WZML bot process. Existing file-selector routes remain unchanged.
 from web.monitoring_routes import router as monitoring_router
 
 app.include_router(monitoring_router)
+
 
 templates = Jinja2Templates(directory="web/templates/")
 
@@ -162,13 +173,23 @@ async def handle_torrent(request: Request):
             )
         data = await request.json()
         if mode == "rename":
+            if len(gid) > 20 and qbittorrent is None:
+                return JSONResponse(
+                    {
+                        "files": [],
+                        "engine": "qBittorrent",
+                        "error": "qBittorrent unavailable",
+                        "message": "qBittorrent is disabled or its daemon is not installed.",
+                    },
+                    status_code=503,
+                )
             if len(gid) > 20:
-                await handle_rename(gid, data)
+                renamed = await handle_rename(gid, data)
                 content = {
                     "files": [],
-                    "engine": "",
-                    "error": "",
-                    "message": "Rename successfully.",
+                    "engine": "qBittorrent",
+                    "error": "" if renamed else "Rename failed.",
+                    "message": "Rename successfully." if renamed else "Rename failed.",
                 }
             else:
                 content = {
@@ -181,6 +202,16 @@ async def handle_torrent(request: Request):
             selected_files, unselected_files = extract_file_ids(data)
             if gid.startswith("SABnzbd_nzo"):
                 await set_sabnzbd(gid, unselected_files)
+            elif len(gid) > 20 and qbittorrent is None:
+                return JSONResponse(
+                    {
+                        "files": [],
+                        "engine": "qBittorrent",
+                        "error": "qBittorrent unavailable",
+                        "message": "qBittorrent is disabled or its daemon is not installed.",
+                    },
+                    status_code=503,
+                )
             elif len(gid) > 20:
                 await set_qbittorrent(gid, selected_files, unselected_files)
             else:
@@ -197,6 +228,16 @@ async def handle_torrent(request: Request):
             if gid.startswith("SABnzbd_nzo"):
                 res = await sabnzbd_client.get_files(gid)
                 content = make_tree(res, "sabnzbd")
+            elif len(gid) > 20 and qbittorrent is None:
+                return JSONResponse(
+                    {
+                        "files": [],
+                        "engine": "qBittorrent",
+                        "error": "qBittorrent unavailable",
+                        "message": "qBittorrent is disabled or its daemon is not installed.",
+                    },
+                    status_code=503,
+                )
             elif len(gid) > 20:
                 res = await qbittorrent.torrents.files(gid)
                 content = make_tree(res, "qbittorrent")
@@ -217,6 +258,9 @@ async def handle_torrent(request: Request):
 
 
 async def handle_rename(gid, data):
+    if qbittorrent is None:
+        LOGGER.warning("qBittorrent rename requested while qBittorrent is unavailable")
+        return False
     try:
         _type = data["type"]
         del data["type"]
@@ -224,8 +268,10 @@ async def handle_rename(gid, data):
             await qbittorrent.torrents.rename_file(hash=gid, **data)
         else:
             await qbittorrent.torrents.rename_folder(hash=gid, **data)
+        return True
     except (ClientError, TimeoutError, Exception, AQError) as e:
         LOGGER.error(f"{e} Errored in renaming")
+        return False
 
 
 async def set_sabnzbd(gid, unselected_files):
@@ -334,6 +380,16 @@ async def sabnzbd_proxy(path: str = "", request: Request = None):
 
 @app.api_route("/qbit/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def qbittorrent_proxy(path: str = "", request: Request = None):
+    if qbittorrent is None or getenv("DISABLE_QBITTORRENT", "false").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="qBittorrent is unavailable in this deployment",
+        )
     password = request.query_params.get("pass") or request.cookies.get("qbit_pass")
     if not password:
         raise HTTPException(status_code=403, detail="Missing password")

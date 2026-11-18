@@ -232,6 +232,11 @@ async def get_buttons(key=None, edit_type=None, edit_mode=False):
             )
         msg = f"Aria2c Options | Page: {int(start / 10)} | State: {state}"
     elif key == "qbit":
+        if Config.DISABLE_QBITTORRENT or TorrentManager.qbittorrent is None:
+            msg = "qBittorrent is unavailable. Install its daemon to enable these settings."
+            buttons.data_button("Back", "botset back")
+            buttons.data_button("Close", "botset close", style=ButtonStyle.DANGER)
+            return msg, buttons.build_menu(1)
         for k in list(qbit_options.keys())[start : 10 + start]:
             buttons.data_button(k, f"botset qbitvar {k}")
         if state == "view":
@@ -513,6 +518,9 @@ async def edit_aria(_, message, pre_message, key):
 @new_task
 async def edit_qbit(_, message, pre_message, key):
     handler_dict[message.chat.id] = False
+    if Config.DISABLE_QBITTORRENT or TorrentManager.qbittorrent is None:
+        await send_message(message, "qBittorrent is unavailable in this deployment.")
+        return await update_buttons(pre_message, "qbit")
     value = message.text
     if value.lower() == "true":
         value = True
@@ -884,6 +892,8 @@ async def edit_bot_settings(client, query):
         await update_nzb_options()
         await database.update_nzb_config()
     elif data[1] == "syncqbit":
+        if Config.DISABLE_QBITTORRENT or TorrentManager.qbittorrent is None:
+            return await query.answer("qBittorrent is unavailable in this deployment.", show_alert=True)
         await query.answer(
             "Syncronization Started. It takes up to 2 sec!", show_alert=True
         )
@@ -897,6 +907,8 @@ async def edit_bot_settings(client, query):
         await TorrentManager.change_aria2_option(data[2], "")
         await database.update_aria2(data[2], "")
     elif data[1] == "emptyqbit":
+        if Config.DISABLE_QBITTORRENT or TorrentManager.qbittorrent is None:
+            return await query.answer("qBittorrent is unavailable in this deployment.", show_alert=True)
         await query.answer()
         await TorrentManager.qbittorrent.app.set_preferences({data[2]: value})
         qbit_options[data[2]] = ""

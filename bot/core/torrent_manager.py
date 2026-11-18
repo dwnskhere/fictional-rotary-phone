@@ -52,11 +52,34 @@ class TorrentManager:
                 LOGGER.info("Torrents are disabled.")
                 return
 
-            cls.qbittorrent = await create_client("http://localhost:8090/api/v2/")
-            cls.qbittorrent = wrap_with_retry(cls.qbittorrent)
+            from os import getenv
+
+            qbit_disabled = Config.DISABLE_QBITTORRENT or getenv(
+                "DISABLE_QBITTORRENT", "false"
+            ).strip().lower() in ("1", "true", "yes", "on")
+            if qbit_disabled:
+                LOGGER.info(
+                    "qBittorrent is disabled/unavailable; Aria2 torrent support remains active."
+                )
+                return
+
+            try:
+                cls.qbittorrent = await create_client("http://localhost:8090/api/v2/")
+                cls.qbittorrent = wrap_with_retry(cls.qbittorrent)
+            except Exception as e:
+                # qBittorrent is optional when Aria2 is available. A failed
+                # qBittorrent WebUI connection must not tear down Aria2.
+                cls.qbittorrent = None
+                from os import environ
+
+                environ["DISABLE_QBITTORRENT"] = "true"
+                LOGGER.warning(
+                    f"qBittorrent WebUI is unavailable ({type(e).__name__}); "
+                    "qBittorrent-specific tasks are disabled while Aria2 remains active."
+                )
 
         except Exception as e:
-            LOGGER.error(f"Error during initialization: {e}")
+            LOGGER.error(f"Error during Aria2 initialization: {e}")
             await cls.close_all()
             raise
 

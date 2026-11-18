@@ -1,6 +1,6 @@
 # ruff: noqa: E402
 
-from .core.config_manager import Config
+from .core.config_manager import BinConfig, Config
 
 Config.load()
 
@@ -12,6 +12,78 @@ from pytz import timezone
 
 from . import LOGGER, bot_loop
 from .core.tg_client import TgClient
+
+
+def _prepare_optional_services():
+    """Start optional qBittorrent only after persisted config is loaded."""
+    from os import environ, getcwd
+    from shutil import which
+    from subprocess import DEVNULL, run as srun
+
+    if Config.DISABLE_TORRENTS or Config.DISABLE_QBITTORRENT:
+        environ["DISABLE_QBITTORRENT"] = "true"
+        LOGGER.info("qBittorrent daemon startup skipped by configuration.")
+    else:
+        qbit_binary = BinConfig.QBIT_NAME
+        if not which(qbit_binary):
+            environ["DISABLE_QBITTORRENT"] = "true"
+            LOGGER.warning(
+                f"qBittorrent binary '{qbit_binary}' was not found. "
+                "qBittorrent-specific tasks are disabled; Aria2 torrent support remains enabled. "
+                "Install the binary or set QBITTORRENT_BIN to its executable name/path to enable qBittorrent."
+            )
+        else:
+            try:
+                qbit_result = srun(
+                    [qbit_binary, "-d", f"--profile={getcwd()}"],
+                    check=False,
+                    stdout=DEVNULL,
+                    stderr=DEVNULL,
+                    timeout=15,
+                )
+                if qbit_result.returncode != 0:
+                    environ["DISABLE_QBITTORRENT"] = "true"
+                    LOGGER.warning(
+                        f"qBittorrent daemon exited with code {qbit_result.returncode}; "
+                        "qBittorrent-specific tasks are disabled. Aria2 torrent support remains enabled."
+                    )
+                else:
+                    LOGGER.info("qBittorrent daemon started successfully.")
+            except Exception as exc:
+                environ["DISABLE_QBITTORRENT"] = "true"
+                LOGGER.warning(
+                    f"Unable to start qBittorrent daemon ({type(exc).__name__}); "
+                    "qBittorrent-specific tasks are disabled. Aria2 torrent support remains enabled."
+                )
+
+    # The public FastAPI process is a child process. It must receive the
+    # effective Config/MongoDB values through the inherited environment.
+    for key in (
+        "MONITOR_API_ENABLED",
+        "MONITOR_API_TOKEN",
+        "MONITOR_INTERNAL_HOST",
+        "MONITOR_INTERNAL_PORT",
+        "MONITOR_SNAPSHOT_MAX_AGE",
+        "MONITOR_HISTORY_ENABLED",
+        "MONITOR_HISTORY_RETENTION_DAYS",
+    ):
+        value = getattr(Config, key, None)
+        if value is not None:
+            environ[key] = str(value)
+
+    if Config.MONITOR_API_ENABLED:
+        if len(str(Config.MONITOR_API_TOKEN or "").strip()) < 32:
+            LOGGER.error(
+                "MONITOR_API_ENABLED is true but MONITOR_API_TOKEN is missing/too short; "
+                "the monitoring API will not start."
+            )
+        elif not str(Config.MONITOR_INTERNAL_SECRET or "").strip():
+            from secrets import token_urlsafe
+
+            Config.MONITOR_INTERNAL_SECRET = token_urlsafe(48)
+            LOGGER.info("Generated a separate ephemeral secret for the private monitoring bridge.")
+        if Config.MONITOR_INTERNAL_SECRET:
+            environ["MONITOR_INTERNAL_SECRET"] = str(Config.MONITOR_INTERNAL_SECRET)
 
 
 async def main():
@@ -28,6 +100,7 @@ async def main():
     )
 
     await load_settings()
+    _prepare_optional_services()
 
     try:
         tz = timezone(Config.TIMEZONE)
@@ -91,7 +164,7 @@ if Config.MONITOR_API_ENABLED:
     async def _start_monitoring_api():
         from .monitoring.config import settings
         from .monitoring.internal_server import private_server
-        from .monitoring.service import start_monitoring
+        from .monitoring.service import start_monitoring, stop_monitoring
 
         monitor_settings = settings()
         if len(monitor_settings["public_token"]) < 32:
@@ -99,21 +172,21 @@ if Config.MONITOR_API_ENABLED:
                 "Monitoring API is enabled but MONITOR_API_TOKEN must be at least 32 characters. API was not started."
             )
             return
-        if len(monitor_settings["internal_token"]) < 32:
-            LOGGER.error("Monitoring bridge secret is invalid. API was not started.")
-            return
         if monitor_settings["internal_host"] not in ("127.0.0.1", "localhost", "::1"):
             LOGGER.error("Monitoring bridge must bind to loopback only. API was not started.")
+            return
+        # The public token is shared with Graberr. The private bridge secret
+        # was configured/generated before the public Gunicorn child started.
+        if len(monitor_settings["internal_token"]) < 32:
+            LOGGER.error("Monitoring private bridge secret must be at least 32 characters. API was not started.")
             return
         try:
             await start_monitoring(monitor_settings)
             await private_server.start(
                 monitor_settings["internal_host"], monitor_settings["internal_port"]
             )
-            LOGGER.info("WZML read-only Monitoring API started.")
+            LOGGER.info("WZML read-only Monitoring API private bridge started.")
         except Exception:
-            from .monitoring.service import stop_monitoring
-
             await stop_monitoring()
             LOGGER.exception("Failed to start WZML Monitoring API")
 

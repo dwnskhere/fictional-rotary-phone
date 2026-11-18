@@ -82,7 +82,9 @@ class TaskListener(TaskConfig):
 
             record_task_event(self, event_type, state, error_category)
         except Exception as exc:
-            LOGGER.warning(f"Unable to queue monitoring lifecycle event: {type(exc).__name__}")
+            LOGGER.warning(
+                f"Unable to queue monitoring lifecycle event: {type(exc).__name__}"
+            )
 
     async def clean(self):
         with suppress(Exception):
@@ -442,6 +444,7 @@ class TaskListener(TaskConfig):
             LOGGER.info(f"Start from Queued/Upload: {self.name}")
 
         self.upload_start_time = time()
+        self._record_monitor_event("upload_started", "uploading")
 
         self.size = await get_path_size(up_dir)
 
@@ -728,7 +731,12 @@ class TaskListener(TaskConfig):
         error_text = str(error).lower()
         cancelled = self.is_cancelled or any(
             marker in error_text
-            for marker in ("stopped by user", "cancelled by user", "canceled by user", "removed from queue")
+            for marker in (
+                "stopped by user",
+                "cancelled by user",
+                "canceled by user",
+                "removed from queue",
+            )
         )
         self._record_monitor_event(
             "cancelled" if cancelled else "failed",
@@ -815,7 +823,12 @@ class TaskListener(TaskConfig):
         error_text = str(error).lower()
         cancelled = self.is_cancelled or any(
             marker in error_text
-            for marker in ("stopped by user", "cancelled by user", "canceled by user", "removed from queue")
+            for marker in (
+                "stopped by user",
+                "cancelled by user",
+                "canceled by user",
+                "removed from queue",
+            )
         )
         self._record_monitor_event(
             "cancelled" if cancelled else "failed",
