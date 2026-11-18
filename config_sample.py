@@ -17,9 +17,9 @@ DEFAULT_UPLOAD = "rc"
 STATUS_UPDATE_INTERVAL = 15
 # Optional read-only WZML Monitoring API. Generate a token with:
 # python -c "import secrets; print(secrets.token_urlsafe(48))"
-MONITOR_API_ENABLED = False
-MONITOR_API_TOKEN = ""  # Required when MONITOR_API_ENABLED = True (32+ characters)
-MONITOR_INTERNAL_SECRET = ""  # Optional separate bridge secret; defaults to MONITOR_API_TOKEN
+MONITOR_API_ENABLED = True
+MONITOR_API_TOKEN = "k9X7vL2pQ8wR4zM1bY6fH3tJ5sK9aD2vC4m"  # Required when MONITOR_API_ENABLED = True (32+ characters)
+MONITOR_INTERNAL_SECRET = "k9X7vL2pQ8wR4zM1bY6fH3tJ5sK9aD2vC4m"  # Optional separate bridge secret; defaults to MONITOR_API_TOKEN
 MONITOR_INTERNAL_HOST = "127.0.0.1"  # Must remain loopback-only
 MONITOR_INTERNAL_PORT = 8765
 MONITOR_SNAPSHOT_MAX_AGE = 30
